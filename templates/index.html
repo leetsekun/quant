@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Platform - Day of Week Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .section h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .upload-area {
+            border: 3px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background: white;
+            transition: all 0.3s;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        input[type="date"] {
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            margin: 0 5px;
+        }
+        
+        .info-box {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #0c5460;
+        }
+        
+        .error-box {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #721c24;
+        }
+        
+        .success-box {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #155724;
+        }
+        
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .best-day {
+            font-size: 3em;
+            color: #667eea;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            text-transform: uppercase;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 Quant Platform</h1>
+        <p class="subtitle">Analyze Bloomberg OHLC data to find the best trading day of the week</p>
+        
+        <!-- Data Upload Section -->
+        <div class="section">
+            <h2>1. Load Data</h2>
+            <div class="upload-area">
+                <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                <p><strong>Upload Bloomberg CSV file</strong></p>
+                <p style="font-size: 0.9em; color: #666; margin: 10px 0;">
+                    Required format: Bloomberg export with 6 header rows<br>
+                    (Security, Start Date, End Date, Period, Currency, blank row, then data)
+                </p>
+                <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Bloomberg CSV</button>
+                <button class="btn btn-secondary" onclick="loadDefaultData()">Load SPX500 Sample</button>
+            </div>
+            <div id="dataInfo" class="hidden"></div>
+        </div>
+        
+        <!-- Analysis Section -->
+        <div class="section">
+            <h2>2. Analyze Best Day of Week</h2>
+            <div style="margin-bottom: 15px;">
+                <label>Start Date: <input type="date" id="startDate"></label>
+                <label>End Date: <input type="date" id="endDate"></label>
+            </div>
+            <button class="btn" onclick="analyzeBestDay()">Analyze</button>
+            <button class="btn btn-secondary" onclick="clearResults()">Clear</button>
+        </div>
+        
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results" class="hidden">
+            <div class="section">
+                <h2>Results</h2>
+                <div class="result-card">
+                    <h3>Best Day of Week</h3>
+                    <div class="best-day" id="bestDay"></div>
+                    <div id="periodInfo"></div>
+                    <div id="statistics"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let dataLoaded = false;
+        
+        // File upload handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            showLoading();
+            
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    dataLoaded = true;
+                    showMessage('dataInfo', `Data loaded successfully! ${data.rows} rows from ${data.date_range.start} to ${data.date_range.end}`, 'success');
+                } else {
+                    showMessage('dataInfo', 'Error: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showMessage('dataInfo', 'Error uploading file: ' + error, 'error');
+            });
+        });
+        
+        // Load default data
+        function loadDefaultData() {
+            showLoading();
+            
+            fetch('/api/load-default', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    dataLoaded = true;
+                    showMessage('dataInfo', `${data.message}! ${data.rows} rows from ${data.date_range.start} to ${data.date_range.end}`, 'success');
+                } else {
+                    showMessage('dataInfo', 'Error: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showMessage('dataInfo', 'Error loading data: ' + error, 'error');
+            });
+        }
+        
+        // Analyze best day
+        function analyzeBestDay() {
+            if (!dataLoaded) {
+                alert('Please load data first!');
+                return;
+            }
+            
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            showLoading();
+            
+            fetch('/api/best-day-of-week', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    start_date: startDate || null,
+                    end_date: endDate || null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    displayResults(data.result);
+                } else {
+                    showMessage('dataInfo', 'Error: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showMessage('dataInfo', 'Error analyzing data: ' + error, 'error');
+            });
+        }
+        
+        // Display results
+        function displayResults(result) {
+            document.getElementById('bestDay').textContent = result.best_day;
+            document.getElementById('periodInfo').innerHTML = `
+                <div class="info-box">
+                    <strong>Analysis Period:</strong> ${result.period.start} to ${result.period.end} (${result.period.total_days} trading days)
+                </div>
+            `;
+            
+            // Create statistics table
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Avg Return (%)</th>
+                            <th>Median Return (%)</th>
+                            <th>Std Dev (%)</th>
+                            <th>Win Rate (%)</th>
+                            <th>Positive Days</th>
+                            <th>Negative Days</th>
+                            <th>Total Days</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            dayOrder.forEach(day => {
+                if (result.statistics[day]) {
+                    const stats = result.statistics[day];
+                    tableHTML += `
+                        <tr style="${day === result.best_day ? 'background: #e7f3ff; font-weight: bold;' : ''}">
+                            <td>${day}</td>
+                            <td>${stats.avg_return.toFixed(4)}</td>
+                            <td>${stats.median_return.toFixed(4)}</td>
+                            <td>${stats.std_return.toFixed(4)}</td>
+                            <td>${stats.win_rate.toFixed(2)}</td>
+                            <td>${stats.positive_days}</td>
+                            <td>${stats.negative_days}</td>
+                            <td>${stats.total_days}</td>
+                        </tr>
+                    `;
+                }
+            });
+            
+            tableHTML += '</tbody></table>';
+            document.getElementById('statistics').innerHTML = tableHTML;
+            
+            document.getElementById('results').classList.remove('hidden');
+        }
+        
+        // Clear results
+        function clearResults() {
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+        }
+        
+        // Show message
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.className = type === 'success' ? 'success-box' : 'error-box';
+            element.innerHTML = message;
+            element.classList.remove('hidden');
+        }
+        
+        // Loading indicators
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
