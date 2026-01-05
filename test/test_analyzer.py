@@ -293,3 +293,104 @@ def test_bloomberg_date_parsing(analyzer, bloomberg_csv_file):
     # Check that dates are in expected range
     assert analyzer.df['Date'].min() >= pd.Timestamp('2024-01-01')
     assert analyzer.df['Date'].max() <= pd.Timestamp('2024-12-31')
+
+
+def test_low_volatility_streaks_basic(analyzer, bloomberg_csv_file):
+    """Test basic low volatility windows functionality"""
+    analyzer.load_data(bloomberg_csv_file)
+    
+    result = analyzer.low_volatility_streaks(consecutive_days=3, volatility_threshold=2.0)
+    
+    # Check result structure
+    assert 'parameters' in result
+    assert 'period' in result
+    assert 'summary' in result
+    assert 'windows' in result
+    
+    # Check parameters
+    assert result['parameters']['window_size'] == 3
+    assert result['parameters']['volatility_threshold'] == 2.0
+    
+    # Check summary
+    assert 'matching_windows' in result['summary']
+    assert 'total_possible_windows' in result['summary']
+    assert 'match_percentage' in result['summary']
+
+
+def test_low_volatility_streaks_with_date_range(analyzer, bloomberg_csv_file):
+    """Test low volatility windows with date filtering"""
+    analyzer.load_data(bloomberg_csv_file)
+    
+    start_date = '2024-01-03'
+    end_date = '2024-01-08'
+    
+    result = analyzer.low_volatility_streaks(
+        consecutive_days=2,
+        volatility_threshold=1.5,
+        start_date=start_date,
+        end_date=end_date
+    )
+    
+    # Check that period is filtered
+    result_start = pd.to_datetime(result['period']['start'])
+    result_end = pd.to_datetime(result['period']['end'])
+    
+    assert result_start >= pd.to_datetime(start_date)
+    assert result_end <= pd.to_datetime(end_date)
+
+
+def test_low_volatility_streaks_no_data(analyzer):
+    """Test low volatility windows without loading data first"""
+    with pytest.raises(Exception) as exc_info:
+        analyzer.low_volatility_streaks()
+    
+    assert 'No data loaded' in str(exc_info.value)
+
+
+def test_low_volatility_streaks_insufficient_data(analyzer):
+    """Test low volatility windows with insufficient data"""
+    # Create CSV with only 2 days of data
+    dates = pd.date_range(start='2024-01-01', periods=2, freq='B')
+    open_prices = [100, 102]
+    high_prices = [101, 103]
+    low_prices = [99, 101]
+    close_prices = [100.5, 102.5]
+    pct_changes = [0.5, 1.99]
+    
+    filepath = create_bloomberg_csv(dates, open_prices, high_prices, low_prices, close_prices, pct_changes)
+    
+    try:
+        analyzer.load_data(filepath)
+        
+        with pytest.raises(Exception) as exc_info:
+            analyzer.low_volatility_streaks(consecutive_days=5)
+        
+        assert 'Not enough data' in str(exc_info.value)
+    finally:
+        os.unlink(filepath)
+
+
+def test_low_volatility_streaks_details(analyzer, bloomberg_csv_file):
+    """Test that window details are correctly calculated"""
+    analyzer.load_data(bloomberg_csv_file)
+    
+    result = analyzer.low_volatility_streaks(consecutive_days=2, volatility_threshold=3.0)
+    
+    # Check window structure if any windows found
+    if result['summary']['matching_windows'] > 0:
+        window = result['windows'][0]
+        assert 'reference_date' in window
+        assert 'reference_close' in window
+        assert 'window_start' in window
+        assert 'window_end' in window
+        assert 'window_end_close' in window
+        assert 'price_change_pct' in window
+        assert 'window_high' in window
+        assert 'window_low' in window
+        assert 'window_volatility_pct' in window
+        
+        # Verify price change is within threshold
+        assert window['price_change_pct'] <= 3.0
+        
+        # Verify volatility is calculated correctly
+        assert window['window_volatility_pct'] >= 0

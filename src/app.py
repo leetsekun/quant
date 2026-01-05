@@ -91,3 +91,31 @@ def load_default():
             return jsonify({'error': 'Default data file not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/low-volatility-streaks', methods=['POST'])
+def low_volatility_streaks():
+    """Find all windows with low price volatility"""
+    try:
+        data = request.json
+        consecutive_days = data.get('consecutive_days', 5)
+        volatility_threshold = data.get('volatility_threshold', 1.0)
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not analyzer.df is not None and len(analyzer.df) > 0:
+            return jsonify({'error': 'Please upload data first'}), 400
+        
+        result = analyzer.low_volatility_streaks(
+            consecutive_days=consecutive_days,
+            volatility_threshold=volatility_threshold,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+

@@ -225,6 +225,30 @@
             <button class="btn btn-secondary" onclick="clearResults()">Clear</button>
         </div>
         
+        <!-- Low Volatility Streaks Section -->
+        <div class="section">
+            <h2>3. Low Volatility Windows</h2>
+            <p style="color: #666; margin-bottom: 15px;">
+                Find all X-day windows where closing price change from previous day is within Y% threshold
+            </p>
+            <div style="margin-bottom: 15px;">
+                <label>Window Size (X days): 
+                    <input type="number" id="consecutiveDays" value="5" min="2" max="100" 
+                           style="width: 80px; padding: 8px; border: 2px solid #dee2e6; border-radius: 8px;">
+                </label>
+                <label>Price Change Threshold (Y%): 
+                    <input type="number" id="volatilityThreshold" value="1.0" min="0.1" max="10" step="0.1" 
+                           style="width: 80px; padding: 8px; border: 2px solid #dee2e6; border-radius: 8px;">
+                </label>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label>Start Date: <input type="date" id="startDate2"></label>
+                <label>End Date: <input type="date" id="endDate2"></label>
+            </div>
+            <button class="btn" onclick="analyzeVolatility()">Find Windows</button>
+            <button class="btn btn-secondary" onclick="clearVolResults()">Clear</button>
+        </div>
+        
         <!-- Loading Indicator -->
         <div id="loading" class="loading">
             <div class="spinner"></div>
@@ -240,6 +264,17 @@
                     <div class="best-day" id="bestDay"></div>
                     <div id="periodInfo"></div>
                     <div id="statistics"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Volatility Results Section -->
+        <div id="volResults" class="hidden">
+            <div class="section">
+                <h2>Low Volatility Windows Results</h2>
+                <div class="result-card">
+                    <div id="volSummary"></div>
+                    <div id="volStreaks"></div>
                 </div>
             </div>
         </div>
@@ -395,6 +430,114 @@
             document.getElementById('results').classList.add('hidden');
             document.getElementById('startDate').value = '';
             document.getElementById('endDate').value = '';
+        }
+        
+        // Analyze volatility streaks
+        function analyzeVolatility() {
+            if (!dataLoaded) {
+                alert('Please load data first!');
+                return;
+            }
+            
+            const consecutiveDays = parseInt(document.getElementById('consecutiveDays').value);
+            const volatilityThreshold = parseFloat(document.getElementById('volatilityThreshold').value);
+            const startDate = document.getElementById('startDate2').value;
+            const endDate = document.getElementById('endDate2').value;
+            
+            showLoading();
+            
+            fetch('/api/low-volatility-streaks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    consecutive_days: consecutiveDays,
+                    volatility_threshold: volatilityThreshold,
+                    start_date: startDate || null,
+                    end_date: endDate || null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    displayVolatilityResults(data.result);
+                } else {
+                    showMessage('dataInfo', 'Error: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showMessage('dataInfo', 'Error analyzing volatility: ' + error, 'error');
+            });
+        }
+        
+        // Display volatility results
+        function displayVolatilityResults(result) {
+            // Summary
+            document.getElementById('volSummary').innerHTML = `
+                <h3>Summary</h3>
+                <div class="info-box">
+                    <strong>Parameters:</strong> ${result.parameters.window_size}-day windows with price change ≤ ${result.parameters.volatility_threshold}%<br>
+                    <strong>Period:</strong> ${result.period.start} to ${result.period.end} (${result.period.total_days} trading days)<br>
+                    <strong>Matching Windows:</strong> ${result.summary.matching_windows} out of ${result.summary.total_possible_windows} possible windows (${result.summary.match_percentage}%)
+                </div>
+            `;
+            
+            // Windows table
+            if (result.windows.length > 0) {
+                let tableHTML = `
+                    <h3 style="margin-top: 20px;">All Matching Windows</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Reference Date</th>
+                                <th>Ref Close</th>
+                                <th>Window Start</th>
+                                <th>Window End</th>
+                                <th>End Close</th>
+                                <th>Price Change %</th>
+                                <th>Window High</th>
+                                <th>Window Low</th>
+                                <th>Window Volatility %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                result.windows.forEach((window, index) => {
+                    tableHTML += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${window.reference_date}</td>
+                            <td>${window.reference_close}</td>
+                            <td>${window.window_start}</td>
+                            <td>${window.window_end}</td>
+                            <td>${window.window_end_close}</td>
+                            <td>${window.price_change_pct}</td>
+                            <td>${window.window_high}</td>
+                            <td>${window.window_low}</td>
+                            <td>${window.window_volatility_pct}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += '</tbody></table>';
+                document.getElementById('volStreaks').innerHTML = tableHTML;
+            } else {
+                document.getElementById('volStreaks').innerHTML = '<p style="margin-top: 15px; color: #666;">No windows found matching the criteria.</p>';
+            }
+            
+            document.getElementById('volResults').classList.remove('hidden');
+        }
+        
+        // Clear volatility results
+        function clearVolResults() {
+            document.getElementById('volResults').classList.add('hidden');
+            document.getElementById('startDate2').value = '';
+            document.getElementById('endDate2').value = '';
         }
         
         // Show message

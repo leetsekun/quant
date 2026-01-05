@@ -93,14 +93,6 @@ class QuantAnalyzer:
             # Add day of week
             df['DayOfWeek'] = df['Date'].dt.day_name()
 
-            # Debug print
-            with pd.option_context(
-                'display.max_rows', None,
-                'display.max_columns', None,
-                'display.width', None
-            ):
-                print(df)
-
             print(df)
             
             self.df = df
@@ -166,6 +158,103 @@ class QuantAnalyzer:
                 'total_days': len(df)
             },
             'statistics': day_stats.to_dict('index')
+        }
+        
+        return result
+    
+    def low_volatility_streaks(self, consecutive_days=5, volatility_threshold=1.0, start_date=None, end_date=None):
+        """Find all X-day windows where price change is within Y% threshold
+        
+        For each X-day window, checks if the closing price at the end of the window
+        is within Y% of the closing price on the day BEFORE the window starts.
+        
+        Example: X=4, Y=1
+        Window: 1998-01-06 to 1998-01-09 (4 days)
+        Compare: Close on 1998-01-09 vs Close on 1998-01-05
+        Match if: abs((Close_1998-01-09 - Close_1998-01-05) / Close_1998-01-05 * 100) <= 1%
+        
+        Args:
+            consecutive_days (int): Window size in days (X)
+            volatility_threshold (float): Maximum price change threshold in % (Y)
+            start_date (str): Optional start date for filtering
+            end_date (str): Optional end date for filtering
+        
+        Returns:
+            dict: Analysis results including all matching windows
+        """
+        if not self.data_loaded or self.df is None:
+            raise Exception("No data loaded")
+        
+        # Filter by date range
+        df = self.df.copy()
+        
+        if start_date:
+            start_date = pd.to_datetime(start_date)
+            df = df[df['Date'] >= start_date]
+        
+        if end_date:
+            end_date = pd.to_datetime(end_date)
+            df = df[df['Date'] <= end_date]
+        
+        if len(df) <= consecutive_days:
+            raise Exception(f"Not enough data. Need at least {consecutive_days + 1} days, but only have {len(df)} days")
+        
+        # Find all X-day windows where price change is within Y%
+        windows = []
+        
+        # Iterate through all possible windows
+        # Start from index consecutive_days (need previous day for comparison)
+        for i in range(consecutive_days, len(df)):
+            # Window end date is at index i
+            window_end_idx = i
+            # Window start date is at index i - consecutive_days + 1
+            window_start_idx = i - consecutive_days + 1
+            # Reference date (day before window) is at index i - consecutive_days
+            reference_idx = i - consecutive_days
+            
+            # Get closing prices
+            reference_close = df.iloc[reference_idx]['Close']
+            window_end_close = df.iloc[window_end_idx]['Close']
+            
+            # Calculate percentage change
+            pct_change = abs((window_end_close - reference_close) / reference_close * 100)
+            
+            # Check if within threshold
+            if pct_change <= volatility_threshold:
+                window_data = df.iloc[window_start_idx:window_end_idx+1]
+                
+                window_high = window_data['High'].max()
+                window_low = window_data['Low'].min()
+                volatility_pct = ((window_high - window_low) / reference_close) * 100
+                
+                windows.append({
+                    'reference_date': df.iloc[reference_idx]['Date'].strftime('%Y-%m-%d'),
+                    'reference_close': round(reference_close, 2),
+                    'window_start': df.iloc[window_start_idx]['Date'].strftime('%Y-%m-%d'),
+                    'window_end': df.iloc[window_end_idx]['Date'].strftime('%Y-%m-%d'),
+                    'window_end_close': round(window_end_close, 2),
+                    'price_change_pct': round(pct_change, 4),
+                    'window_high': round(window_high, 2),
+                    'window_low': round(window_low, 2),
+                    'window_volatility_pct': round(volatility_pct, 4)
+                })
+        
+        result = {
+            'parameters': {
+                'window_size': consecutive_days,
+                'volatility_threshold': volatility_threshold
+            },
+            'period': {
+                'start': df['Date'].min().strftime('%Y-%m-%d'),
+                'end': df['Date'].max().strftime('%Y-%m-%d'),
+                'total_days': len(df)
+            },
+            'summary': {
+                'matching_windows': len(windows),
+                'total_possible_windows': len(df) - consecutive_days,
+                'match_percentage': round((len(windows) / (len(df) - consecutive_days)) * 100, 2) if len(df) > consecutive_days else 0
+            },
+            'windows': windows
         }
         
         return result
