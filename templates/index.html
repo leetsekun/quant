@@ -229,7 +229,7 @@
         <div class="section">
             <h2>3. Low Volatility Windows</h2>
             <p style="color: #666; margin-bottom: 15px;">
-                Find all X-day windows where closing price change from previous day is within Y% threshold
+                Find all X-day windows where closing price change from reference price is within Y% threshold
             </p>
             <div style="margin-bottom: 15px;">
                 <label>Window Size (X days): 
@@ -239,6 +239,14 @@
                 <label>Price Change Threshold (Y%): 
                     <input type="number" id="volatilityThreshold" value="1.0" min="0.1" max="10" step="0.1" 
                            style="width: 80px; padding: 8px; border: 2px solid #dee2e6; border-radius: 8px;">
+                </label>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label>Reference Price: 
+                    <select id="referencePrice" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; font-size: 1em;">
+                        <option value="prev_close">Previous Day Close</option>
+                        <option value="window_open">Window Start Open</option>
+                    </select>
                 </label>
             </div>
             <div style="margin-bottom: 15px;">
@@ -441,6 +449,7 @@
             
             const consecutiveDays = parseInt(document.getElementById('consecutiveDays').value);
             const volatilityThreshold = parseFloat(document.getElementById('volatilityThreshold').value);
+            const referencePrice = document.getElementById('referencePrice').value;
             const startDate = document.getElementById('startDate2').value;
             const endDate = document.getElementById('endDate2').value;
             
@@ -454,6 +463,7 @@
                 body: JSON.stringify({
                     consecutive_days: consecutiveDays,
                     volatility_threshold: volatilityThreshold,
+                    reference_price: referencePrice,
                     start_date: startDate || null,
                     end_date: endDate || null
                 })
@@ -476,10 +486,12 @@
         // Display volatility results
         function displayVolatilityResults(result) {
             // Summary
+            const refPriceLabel = result.parameters.reference_price === 'prev_close' ? 'Previous Day Close' : 'Window Start Open';
             document.getElementById('volSummary').innerHTML = `
                 <h3>Summary</h3>
                 <div class="info-box">
                     <strong>Parameters:</strong> ${result.parameters.window_size}-day windows with price change ≤ ${result.parameters.volatility_threshold}%<br>
+                    <strong>Reference Price:</strong> ${refPriceLabel}<br>
                     <strong>Period:</strong> ${result.period.start} to ${result.period.end} (${result.period.total_days} trading days)<br>
                     <strong>Matching Windows:</strong> ${result.summary.matching_windows} out of ${result.summary.total_possible_windows} possible windows (${result.summary.match_percentage}%)
                 </div>
@@ -494,7 +506,8 @@
                             <tr>
                                 <th>#</th>
                                 <th>Reference Date</th>
-                                <th>Ref Close</th>
+                                <th>Reference Type</th>
+                                <th>Ref Price</th>
                                 <th>Window Start</th>
                                 <th>Window End</th>
                                 <th>End Close</th>
@@ -512,7 +525,8 @@
                         <tr>
                             <td>${index + 1}</td>
                             <td>${window.reference_date}</td>
-                            <td>${window.reference_close}</td>
+                            <td>${window.reference_type}</td>
+                            <td>${window.reference_price}</td>
                             <td>${window.window_start}</td>
                             <td>${window.window_end}</td>
                             <td>${window.window_end_close}</td>

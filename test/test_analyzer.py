@@ -339,6 +339,27 @@ def test_low_volatility_streaks_with_date_range(analyzer, bloomberg_csv_file):
     assert result_end <= pd.to_datetime(end_date)
 
 
+def test_low_volatility_streaks_window_open_mode(analyzer, bloomberg_csv_file):
+    """Test low volatility windows with window_open reference price"""
+    analyzer.load_data(bloomberg_csv_file)
+    
+    result = analyzer.low_volatility_streaks(
+        consecutive_days=2,
+        volatility_threshold=2.0,
+        reference_price='window_open'
+    )
+    
+    # Check parameters
+    assert result['parameters']['reference_price'] == 'window_open'
+    
+    # Check that windows use correct reference
+    if result['summary']['matching_windows'] > 0:
+        window = result['windows'][0]
+        assert window['reference_type'] == 'Window Open'
+        # Reference date should be same as window start for window_open mode
+        assert window['reference_date'] == window['window_start']
+
+
 def test_low_volatility_streaks_no_data(analyzer):
     """Test low volatility windows without loading data first"""
     with pytest.raises(Exception) as exc_info:
@@ -380,7 +401,8 @@ def test_low_volatility_streaks_details(analyzer, bloomberg_csv_file):
     if result['summary']['matching_windows'] > 0:
         window = result['windows'][0]
         assert 'reference_date' in window
-        assert 'reference_close' in window
+        assert 'reference_price' in window
+        assert 'reference_type' in window
         assert 'window_start' in window
         assert 'window_end' in window
         assert 'window_end_close' in window
@@ -394,3 +416,20 @@ def test_low_volatility_streaks_details(analyzer, bloomberg_csv_file):
         
         # Verify volatility is calculated correctly
         assert window['window_volatility_pct'] >= 0
+        
+        # Verify reference type for default mode
+        assert window['reference_type'] == 'Previous Close'
+
+
+def test_low_volatility_streaks_invalid_reference(analyzer, bloomberg_csv_file):
+    """Test low volatility windows with invalid reference_price"""
+    analyzer.load_data(bloomberg_csv_file)
+    
+    with pytest.raises(Exception) as exc_info:
+        analyzer.low_volatility_streaks(
+            consecutive_days=2,
+            volatility_threshold=1.0,
+            reference_price='invalid_option'
+        )
+    
+    assert 'Invalid reference_price' in str(exc_info.value)

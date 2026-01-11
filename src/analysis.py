@@ -162,20 +162,26 @@ class QuantAnalyzer:
         
         return result
     
-    def low_volatility_streaks(self, consecutive_days=5, volatility_threshold=1.0, start_date=None, end_date=None):
+    def low_volatility_streaks(self, consecutive_days=5, volatility_threshold=1.0, reference_price='prev_close', start_date=None, end_date=None):
         """Find all X-day windows where price change is within Y% threshold
         
         For each X-day window, checks if the closing price at the end of the window
-        is within Y% of the closing price on the day BEFORE the window starts.
+        is within Y% of a reference price.
         
-        Example: X=4, Y=1
+        Example with reference_price='prev_close': X=4, Y=1
         Window: 1998-01-06 to 1998-01-09 (4 days)
         Compare: Close on 1998-01-09 vs Close on 1998-01-05
         Match if: abs((Close_1998-01-09 - Close_1998-01-05) / Close_1998-01-05 * 100) <= 1%
         
+        Example with reference_price='window_open': X=2, Y=1
+        Window: 1998-01-05 to 1998-01-06 (2 days)
+        Compare: Close on 1998-01-06 vs Open on 1998-01-05
+        Match if: abs((Close_1998-01-06 - Open_1998-01-05) / Open_1998-01-05 * 100) <= 1%
+        
         Args:
             consecutive_days (int): Window size in days (X)
             volatility_threshold (float): Maximum price change threshold in % (Y)
+            reference_price (str): Reference price type - 'prev_close' (day before window) or 'window_open' (first day open)
             start_date (str): Optional start date for filtering
             end_date (str): Optional end date for filtering
         
@@ -196,28 +202,50 @@ class QuantAnalyzer:
             end_date = pd.to_datetime(end_date)
             df = df[df['Date'] <= end_date]
         
-        if len(df) <= consecutive_days:
-            raise Exception(f"Not enough data. Need at least {consecutive_days + 1} days, but only have {len(df)} days")
+        # Validate reference_price parameter
+        if reference_price not in ['prev_close', 'window_open']:
+            raise Exception(f"Invalid reference_price '{reference_price}'. Must be 'prev_close' or 'window_open'")
+        
+        # Check minimum data requirements based on reference price type
+        min_required = consecutive_days + 1 if reference_price == 'prev_close' else consecutive_days
+        if len(df) < min_required:
+            raise Exception(f"Not enough data. Need at least {min_required} days, but only have {len(df)} days")
         
         # Find all X-day windows where price change is within Y%
         windows = []
         
         # Iterate through all possible windows
-        # Start from index consecutive_days (need previous day for comparison)
-        for i in range(consecutive_days, len(df)):
+        if reference_price == 'prev_close':
+            # Start from index consecutive_days (need previous day for comparison)
+            start_idx = consecutive_days
+        else:
+            # Start from index consecutive_days - 1 (use window's first day open)
+            start_idx = consecutive_days - 1
+        
+        for i in range(start_idx, len(df)):
             # Window end date is at index i
             window_end_idx = i
             # Window start date is at index i - consecutive_days + 1
             window_start_idx = i - consecutive_days + 1
-            # Reference date (day before window) is at index i - consecutive_days
-            reference_idx = i - consecutive_days
             
-            # Get closing prices
-            reference_close = df.iloc[reference_idx]['Close']
+            # Get reference price based on mode
+            if reference_price == 'prev_close':
+                # Reference date (day before window) is at index i - consecutive_days
+                reference_idx = i - consecutive_days
+                reference_value = df.iloc[reference_idx]['Close']
+                reference_date = df.iloc[reference_idx]['Date'].strftime('%Y-%m-%d')
+                reference_label = 'Previous Close'
+            else:
+                # Reference is the opening price of window start
+                reference_idx = window_start_idx
+                reference_value = df.iloc[reference_idx]['Open']
+                reference_date = df.iloc[reference_idx]['Date'].strftime('%Y-%m-%d')
+                reference_label = 'Window Open'
+            
             window_end_close = df.iloc[window_end_idx]['Close']
             
             # Calculate percentage change
-            pct_change = abs((window_end_close - reference_close) / reference_close * 100)
+            pct_change = abs((window_end_close - reference_value) / reference_value * 100)
             
             # Check if within threshold
             if pct_change <= volatility_threshold:
@@ -225,11 +253,12 @@ class QuantAnalyzer:
                 
                 window_high = window_data['High'].max()
                 window_low = window_data['Low'].min()
-                volatility_pct = ((window_high - window_low) / reference_close) * 100
+                volatility_pct = ((window_high - window_low) / reference_value) * 100
                 
                 windows.append({
-                    'reference_date': df.iloc[reference_idx]['Date'].strftime('%Y-%m-%d'),
-                    'reference_close': round(reference_close, 2),
+                    'reference_date': reference_date,
+                    'reference_price': round(reference_value, 2),
+                    'reference_type': reference_label,
                     'window_start': df.iloc[window_start_idx]['Date'].strftime('%Y-%m-%d'),
                     'window_end': df.iloc[window_end_idx]['Date'].strftime('%Y-%m-%d'),
                     'window_end_close': round(window_end_close, 2),
@@ -242,7 +271,8 @@ class QuantAnalyzer:
         result = {
             'parameters': {
                 'window_size': consecutive_days,
-                'volatility_threshold': volatility_threshold
+                'volatility_threshold': volatility_threshold,
+                'reference_price': reference_price
             },
             'period': {
                 'start': df['Date'].min().strftime('%Y-%m-%d'),

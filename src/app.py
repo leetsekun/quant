@@ -99,6 +99,7 @@ def low_volatility_streaks():
         data = request.json
         consecutive_days = data.get('consecutive_days', 5)
         volatility_threshold = data.get('volatility_threshold', 1.0)
+        reference_price = data.get('reference_price', 'prev_close')
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         
@@ -108,6 +109,7 @@ def low_volatility_streaks():
         result = analyzer.low_volatility_streaks(
             consecutive_days=consecutive_days,
             volatility_threshold=volatility_threshold,
+            reference_price=reference_price,
             start_date=start_date,
             end_date=end_date
         )
